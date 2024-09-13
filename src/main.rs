@@ -17,6 +17,20 @@
 //! cargo run --release -- --runtime rococo-people
 //! ```
 //!
+//! The results will be a bit bring for such a small runtime, but for a larger one - eg Kusama - it could look like this:
+//!
+//! ![Kusama storage analysis](./.images/ksm-overview.png)
+//!
+//! You can also zoom in on a specific pallet:
+//!
+//! ```sh
+//! cargo run --release -- --runtime rococo-people --pallet Balances
+//! ```
+//!
+//! Again for Kusama:
+//!
+//! ![Kusama Balances pallet](./.images/ksm-zoom.png)
+//!
 //! ## License
 //!
 //! GPLv3 ONLY, see [LICENSE](./LICENSE) file for details.

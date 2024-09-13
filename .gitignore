@@ -40,5 +40,5 @@ rls*.log
 runtime/wasm/target/
 substrate.code-workspace
 target/
-.meta
-.snap
+*.meta
+*.snap
