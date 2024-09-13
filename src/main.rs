@@ -17,7 +17,8 @@
 //! cargo run --release -- --runtime rococo-people
 //! ```
 //!
-//! The results will be a bit bring for such a small runtime, but for a larger one - eg Kusama - it could look like this:
+//! The results will be a bit bring for such a small runtime, but for a larger one - eg Kusama - it
+//! could look like this:
 //!
 //! ![Kusama storage analysis](./.images/ksm-overview.png)
 //!
@@ -35,8 +36,7 @@
 //!
 //! GPLv3 ONLY, see [LICENSE](./LICENSE) file for details.
 
-use anyhow::Result;
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use indicatif::ProgressBar;
 use itertools::Itertools;
@@ -68,8 +68,8 @@ struct Args {
 	#[clap(short, long)]
 	runtime: String,
 
-    #[clap(long, alias = "url")]
-    uri: Option<String>,
+	#[clap(long, alias = "url")]
+	uri: Option<String>,
 
 	#[clap(short, long)]
 	pallet: Option<String>,
@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
 	let meta_path = format!("{}.meta", args.runtime);
 	let verbose = args.verbose || args.pallet.is_some();
 
-	let (mut num_keys, mut snap) = load_snapshot(&snap_path).await?;
+	let (num_keys, mut snap) = load_snapshot(&snap_path).await?;
 	let bar = ProgressBar::new(num_keys as u64);
 
 	let meta = get_metadata(&meta_path, &url).await?;
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
 	let mut found_by_pallet = BTreeMap::<String, PalletInfo>::new();
 
 	for _ in 0..num_keys {
-		let (key, (value, ref_count)) = snap.recv().await.unwrap();
+		let (key, (value, _ref_count)) = snap.recv().await.unwrap();
 		let cat = categorize_prefix(&key, &prefix_lookup);
 
 		match cat {
@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
 		.collect::<Vec<_>>();
 
 	// Print stats about how many keys per pallet and item
-	for (p, pallet) in pallet_infos.iter().enumerate() {
+	for (_p, pallet) in pallet_infos.iter().enumerate() {
 		if args
 			.pallet
 			.as_ref()
@@ -218,7 +218,7 @@ async fn main() -> Result<()> {
 		};
 		println!("{}  {}{suffix}", fmt_bytes(pallet.size), pallet.name);
 
-		for (e, (_, item)) in pallet
+		for (_e, (_, item)) in pallet
 			.items
 			.iter()
 			.sorted_by_key(|(_, i)| i.key_len + i.value_len)
@@ -298,7 +298,8 @@ async fn get_metadata(path: &str, url: &str) -> Result<Metadata> {
 
 async fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>, i32))>)> {
 	log::info!("Loading snapshot from file");
-	let file = File::open(path).map_err(|e| anyhow!("Failed to load snapshot file from {}: {}", path, e))?;
+	let file = File::open(path)
+		.map_err(|e| anyhow!("Failed to load snapshot file from {}: {}", path, e))?;
 	let mut input = parity_scale_codec::IoReader(file);
 
 	let snapshot_version = Compact::<u16>::decode(&mut input)?;
