@@ -19,9 +19,8 @@ Then run the analysis:
 cargo run --release -- --runtime rococo-people
 ```
 
-The results will be a bit boring for such a small runtime. You can use [this](https://tasty.limo/kusama.snap) Kusama snapshot to see it in action with more real-world data:
-
-```sh
+The results will be a bit bring for such a small runtime, but for a larger one - eg Kusama - it
+could look like this:
 
 ![Kusama storage analysis](./.images/ksm-overview.png)
 
