@@ -87,6 +87,7 @@ async fn main() -> Result<()> {
 	let snap_path = format!("{}.snap", args.runtime);
 	let meta_path = format!("{}.meta", args.runtime);
 	let verbose = args.verbose || args.pallet.is_some();
+	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
 
 	let (num_keys, mut snap) = load_snapshot(&snap_path).await?;
 	let bar = ProgressBar::new(num_keys as u64);
@@ -147,13 +148,12 @@ async fn main() -> Result<()> {
 					items: BTreeMap::new(),
 				});
 
-				let item_info =
-					pallet_info.items.entry("Unknown".to_string()).or_insert(ItemInfo {
-						name: "Unknown".to_string(),
-						key_len: 0,
-						value_len: 0,
-						num_entries: 0,
-					});
+				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
+					name: unknown.clone(),
+					key_len: 0,
+					value_len: 0,
+					num_entries: 0,
+				});
 
 				item_info.key_len += key.len();
 				item_info.value_len += value.len();
@@ -162,20 +162,18 @@ async fn main() -> Result<()> {
 				pallet_info.size += key.len() + value.len();
 			},
 			_ => {
-				let pallet_info =
-					found_by_pallet.entry("Unknown".to_string()).or_insert(PalletInfo {
-						name: "Unknown".to_string(),
-						size: 0,
-						items: BTreeMap::new(),
-					});
+				let pallet_info = found_by_pallet.entry(unknown.clone()).or_insert(PalletInfo {
+					name: unknown.clone(),
+					size: 0,
+					items: BTreeMap::new(),
+				});
 
-				let item_info =
-					pallet_info.items.entry("Unknown".to_string()).or_insert(ItemInfo {
-						name: "Unknown".to_string(),
-						key_len: 0,
-						value_len: 0,
-						num_entries: 0,
-					});
+				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
+					name: unknown.clone(),
+					key_len: 0,
+					value_len: 0,
+					num_entries: 0,
+				});
 
 				item_info.key_len += key.len();
 				item_info.value_len += value.len();
