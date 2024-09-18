@@ -1,27 +1,28 @@
 [package]
-name = "pdu"
+name = "polkadot-du"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0"
+repository = "https://github.com/ggwpez/pdu"
+description = "PDU - Polkadot runtime storage analyzer"
+
+[[bin]]
+name = "pdu"
+path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.86"
-clap = { version = "4.5.16", features = ["derive"] }
+anyhow = "1.0.87"
+clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.11.5"
 hex = "0.4.3"
-#futures = "0.3.30"
 indicatif = "0.17.8"
-#inquire = "0.7.4"
 itertools = "0.13.0"
 log = "0.4.22"
 parity-scale-codec = "3.6.12"
 serde_json = "1.0.128"
 sp-crypto-hashing = "0.1.0"
-#rstest = "0.18.2"
-#scale-info = "2.11.1"
-#serde_json = "1.0.115"
 subxt = "0.37.0"
 subxt-metadata = "0.37.0"
-tokio = { version = "1.39.2", features = ["full", "sync"] }
+tokio = { version = "1.40.0", features = ["full", "sync"] }
 termtree = "0.5.1"
 ansi_term = "0.12"
-

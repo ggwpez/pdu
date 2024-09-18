@@ -14,10 +14,10 @@
 //! Then run the analysis:
 //!
 //! ```sh
-//! cargo run --release -- --runtime rococo-people
+//! cargo run --release -- --network rococo-people
 //! ```
 //!
-//! The results will be a bit boring for such a small runtime, but for a larger one - eg Kusama - it
+//! The results will be a bit boring for such a small network, but for a larger one - eg Kusama - it
 //! could look like this. You can download [this snapshot](https://tasty.limo/kusama.snap) to try it.
 //!
 //! ![Kusama storage analysis](./.images/ksm-overview.png)
@@ -25,7 +25,7 @@
 //! You can also zoom in on a specific pallet:
 //!
 //! ```sh
-//! cargo run --release -- --runtime rococo-people --pallet Balances
+//! cargo run --release -- --network rococo-people --pallet Balances
 //! ```
 //!
 //! Again for Kusama:
@@ -42,39 +42,28 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_crypto_hashing::twox_128;
+use std::{collections::BTreeMap, fs::File, io::prelude::*};
 use subxt::Metadata;
 use subxt_metadata::StorageEntryMetadata;
 use termtree::Tree;
 use tokio::sync::mpsc::{channel, Receiver};
 
-use std::{collections::BTreeMap, fs::File, io::prelude::*};
-
-type PrefixMap = BTreeMap<Vec<u8>, (String, Option<StorageEntryMetadata>)>;
-
-struct PalletInfo {
-	name: String,
-	size: usize,
-	items: BTreeMap<String, ItemInfo>,
-}
-
-struct ItemInfo {
-	name: String,
-	key_len: usize,
-	value_len: usize,
-	num_entries: usize,
-}
-
+/// PDU - Polkadot runtime storage analyzer.
 #[derive(Parser)]
 struct Args {
+	/// Name of the network to analyze.
 	#[clap(short, long)]
-	runtime: String,
+	network: String,
 
+	/// URI of an Archive node endpoint.
 	#[clap(long, alias = "url")]
 	uri: Option<String>,
 
+	/// Focus only on this pallet.
 	#[clap(short, long)]
 	pallet: Option<String>,
 
+	/// Print verbose information.
 	#[clap(long)]
 	verbose: bool,
 }
@@ -83,9 +72,12 @@ struct Args {
 async fn main() -> Result<()> {
 	env_logger::init();
 	let args = Args::parse();
-	let url = args.uri.unwrap_or(format!("wss://{}-rpc.polkadot.io:443", args.runtime));
-	let snap_path = format!("{}.snap", args.runtime);
-	let meta_path = format!("{}.meta", args.runtime);
+	let url = args
+		.uri
+		.clone()
+		.unwrap_or(format!("wss://{}-rpc.polkadot.io:443", args.network));
+	let snap_path = format!("{}.snap", args.network);
+	let meta_path = format!("{}.meta", args.network);
 	let verbose = args.verbose || args.pallet.is_some();
 	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
 
@@ -120,7 +112,7 @@ async fn main() -> Result<()> {
 		let cat = categorize_prefix(&key, &prefix_lookup);
 
 		match cat {
-			Some((pallet, Some(storage))) => {
+			CategorizedKey::Item(pallet, item) => {
 				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
 					name: pallet.clone(),
 					size: 0,
@@ -128,8 +120,8 @@ async fn main() -> Result<()> {
 				});
 
 				let item_info =
-					pallet_info.items.entry(storage.name().to_string()).or_insert(ItemInfo {
-						name: storage.name().to_string(),
+					pallet_info.items.entry(item.name().to_string()).or_insert(ItemInfo {
+						name: item.name().to_string(),
 						key_len: 0,
 						value_len: 0,
 						num_entries: 0,
@@ -139,9 +131,9 @@ async fn main() -> Result<()> {
 				item_info.value_len += value.len();
 				item_info.num_entries += 1;
 
-				pallet_info.size += value.len();
+				pallet_info.size += key.len() + value.len();
 			},
-			Some((pallet, None)) => {
+			CategorizedKey::Pallet(pallet) => {
 				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
 					name: pallet.clone(),
 					size: 0,
@@ -161,7 +153,7 @@ async fn main() -> Result<()> {
 
 				pallet_info.size += key.len() + value.len();
 			},
-			_ => {
+			CategorizedKey::Unknown => {
 				let pallet_info = found_by_pallet.entry(unknown.clone()).or_insert(PalletInfo {
 					name: unknown.clone(),
 					size: 0,
@@ -188,13 +180,57 @@ async fn main() -> Result<()> {
 	bar.finish();
 	println!();
 
+	print_results(&found_by_pallet, verbose, &args);
+
+	Ok(())
+}
+
+type PrefixMap = BTreeMap<Vec<u8>, (String, Option<StorageEntryMetadata>)>;
+
+/// Storage size information of a pallet.
+struct PalletInfo {
+	/// Name of the pallet.
+	name: String,
+	size: usize,
+	/// The storage items of the pallet.
+	items: BTreeMap<String, ItemInfo>,
+}
+
+/// Storage size information of a storage item inside a pallet.
+struct ItemInfo {
+	name: String,
+	key_len: usize,
+	value_len: usize,
+	num_entries: usize,
+}
+
+enum CategorizedKey {
+	/// A key that belongs to a storage item inside a pallet.
+	Item(String, StorageEntryMetadata),
+	/// A key that belongs to a pallet but an unknown storage item.
+	Pallet(String),
+	/// A key that does not belong to any known pallet.
+	Unknown,
+}
+
+impl From<(String, Option<StorageEntryMetadata>)> for CategorizedKey {
+	fn from((pallet, storage): (String, Option<StorageEntryMetadata>)) -> Self {
+		if let Some(storage) = storage {
+			CategorizedKey::Item(pallet, storage)
+		} else {
+			CategorizedKey::Pallet(pallet)
+		}
+	}
+}
+
+fn print_results(found_by_pallet: &BTreeMap<String, PalletInfo>, verbose: bool, args: &Args) {
 	let pallet_infos = found_by_pallet
 		.values()
 		.sorted_by(|a, b| b.size.cmp(&a.size))
 		.collect::<Vec<_>>();
 
 	let network_sum = pallet_infos.iter().map(|p| p.size).sum();
-	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum), args.runtime));
+	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum), args.network));
 
 	// Print stats about how many keys per pallet and item
 	for (_p, pallet) in pallet_infos.iter().enumerate() {
@@ -246,7 +282,6 @@ async fn main() -> Result<()> {
 	}
 
 	println!("{}", pretty_tree);
-	Ok(())
 }
 
 fn fmt_bytes(bytes: usize) -> String {
@@ -261,25 +296,22 @@ fn fmt_bytes(bytes: usize) -> String {
 	}
 }
 
-fn categorize_prefix(
-	key: &[u8],
-	lookup: &PrefixMap,
-) -> Option<(String, Option<StorageEntryMetadata>)> {
+fn categorize_prefix(key: &[u8], lookup: &PrefixMap) -> CategorizedKey {
 	if key.len() >= 32 {
 		let prefix = &key[0..32];
 
 		if let Some((pallet, storage)) = lookup.get(prefix) {
-			return Some((pallet.clone(), storage.clone()));
+			return (pallet.clone(), storage.clone()).into();
 		}
 	}
 	if key.len() >= 16 {
 		let prefix = &key[0..16];
 
 		if let Some((pallet, storage)) = lookup.get(prefix) {
-			return Some((pallet.clone(), storage.clone()));
+			return (pallet.clone(), storage.clone()).into();
 		}
 	}
-	None
+	CategorizedKey::Unknown
 }
 
 async fn get_metadata(path: &str, url: &str) -> Result<Metadata> {
