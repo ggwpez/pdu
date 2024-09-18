@@ -1,4 +1,4 @@
-# pdu
+# polkadot-du
 
 Investigate storage size of Substrate chains.
 
@@ -16,10 +16,10 @@ try-runtime create-snapshot --uri wss://rococo-people-rpc.polkadot.io:443 rococo
 Then run the analysis:
 
 ```sh
-cargo run --release -- --runtime rococo-people
+cargo run --release -- --network rococo-people
 ```
 
-The results will be a bit boring for such a small runtime, but for a larger one - eg Kusama - it
+The results will be a bit boring for such a small network, but for a larger one - eg Kusama - it
 could look like this. You can download [this snapshot](https://tasty.limo/kusama.snap) to try it.
 
 ![Kusama storage analysis](./.images/ksm-overview.png)
@@ -27,7 +27,7 @@ could look like this. You can download [this snapshot](https://tasty.limo/kusama
 You can also zoom in on a specific pallet:
 
 ```sh
-cargo run --release -- --runtime rococo-people --pallet Balances
+cargo run --release -- --network rococo-people --pallet Balances
 ```
 
 Again for Kusama:
@@ -37,3 +37,5 @@ Again for Kusama:
 ### License
 
 GPLv3 ONLY, see [LICENSE](./LICENSE) file for details.
+
+License: GPL-3.0
