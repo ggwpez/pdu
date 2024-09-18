@@ -44,6 +44,7 @@ use parity_scale_codec::{Compact, Decode, Encode};
 use sp_crypto_hashing::twox_128;
 use subxt::Metadata;
 use subxt_metadata::StorageEntryMetadata;
+use termtree::Tree;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use std::{collections::BTreeMap, fs::File, io::prelude::*};
@@ -86,6 +87,7 @@ async fn main() -> Result<()> {
 	let snap_path = format!("{}.snap", args.runtime);
 	let meta_path = format!("{}.meta", args.runtime);
 	let verbose = args.verbose || args.pallet.is_some();
+	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
 
 	let (num_keys, mut snap) = load_snapshot(&snap_path).await?;
 	let bar = ProgressBar::new(num_keys as u64);
@@ -137,7 +139,7 @@ async fn main() -> Result<()> {
 				item_info.value_len += value.len();
 				item_info.num_entries += 1;
 
-				pallet_info.size += key.len() + value.len();
+				pallet_info.size += value.len();
 			},
 			Some((pallet, None)) => {
 				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
@@ -146,13 +148,12 @@ async fn main() -> Result<()> {
 					items: BTreeMap::new(),
 				});
 
-				let item_info =
-					pallet_info.items.entry("Unknown".to_string()).or_insert(ItemInfo {
-						name: "Unknown".to_string(),
-						key_len: 0,
-						value_len: 0,
-						num_entries: 0,
-					});
+				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
+					name: unknown.clone(),
+					key_len: 0,
+					value_len: 0,
+					num_entries: 0,
+				});
 
 				item_info.key_len += key.len();
 				item_info.value_len += value.len();
@@ -161,20 +162,18 @@ async fn main() -> Result<()> {
 				pallet_info.size += key.len() + value.len();
 			},
 			_ => {
-				let pallet_info =
-					found_by_pallet.entry("Unknown".to_string()).or_insert(PalletInfo {
-						name: "Unknown".to_string(),
-						size: 0,
-						items: BTreeMap::new(),
-					});
+				let pallet_info = found_by_pallet.entry(unknown.clone()).or_insert(PalletInfo {
+					name: unknown.clone(),
+					size: 0,
+					items: BTreeMap::new(),
+				});
 
-				let item_info =
-					pallet_info.items.entry("Unknown".to_string()).or_insert(ItemInfo {
-						name: "Unknown".to_string(),
-						key_len: 0,
-						value_len: 0,
-						num_entries: 0,
-					});
+				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
+					name: unknown.clone(),
+					key_len: 0,
+					value_len: 0,
+					num_entries: 0,
+				});
 
 				item_info.key_len += key.len();
 				item_info.value_len += value.len();
@@ -193,6 +192,9 @@ async fn main() -> Result<()> {
 		.values()
 		.sorted_by(|a, b| b.size.cmp(&a.size))
 		.collect::<Vec<_>>();
+
+	let network_sum = pallet_infos.iter().map(|p| p.size).sum();
+	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum), args.runtime));
 
 	// Print stats about how many keys per pallet and item
 	for (_p, pallet) in pallet_infos.iter().enumerate() {
@@ -216,7 +218,8 @@ async fn main() -> Result<()> {
 		} else {
 			"".into()
 		};
-		println!("{}  {}{suffix}", fmt_bytes(pallet.size), pallet.name);
+		let mut pallet_node =
+			Tree::new(format!("{} {}{}", fmt_bytes(pallet.size), pallet.name, suffix));
 
 		for (_e, (_, item)) in pallet
 			.items
@@ -235,11 +238,14 @@ async fn main() -> Result<()> {
 			} else {
 				"".into()
 			};
-
-			println!("{}   {}{}", fmt_bytes(item.key_len + item.value_len), item.name, suffix);
+			let item_node = format!("{} {}{}", fmt_bytes(item.value_len), item.name, suffix);
+			pallet_node.push(item_node);
 		}
+
+		pretty_tree.push(pallet_node);
 	}
 
+	println!("{}", pretty_tree);
 	Ok(())
 }
 
