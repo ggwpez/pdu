@@ -2,6 +2,13 @@
 
 Investigate storage size of Substrate chains.
 
+Install with: 
+
+```sh
+cargo install polkadot-du
+pdu --help
+```
+
 ### Example
 
 First acquire a state snapshot. We are going to use the People Rococo chain, since it is rather
