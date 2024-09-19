@@ -38,15 +38,21 @@
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_crypto_hashing::twox_128;
-use std::{collections::BTreeMap, fs::File, io::prelude::*};
+use std::{collections::BTreeMap as Map, fs::File, io::prelude::*};
 use subxt::Metadata;
 use subxt_metadata::StorageEntryMetadata;
 use termtree::Tree;
 use tokio::sync::mpsc::{channel, Receiver};
+use std::sync::Mutex;
+use std::sync::Arc;
+use tokio::task;
+use std::time::Duration;
+use tokio::task::JoinHandle;
+use subxt_metadata::PalletMetadata;
 
 /// PDU - Polkadot runtime storage analyzer.
 #[derive(Parser)]
@@ -70,122 +76,206 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	env_logger::init();
-	let args = Args::parse();
-	let url = args
-		.uri
-		.clone()
-		.unwrap_or(format!("wss://{}-rpc.polkadot.io:443", args.network));
-	let snap_path = format!("{}.snap", args.network);
-	let meta_path = format!("{}.meta", args.network);
-	let verbose = args.verbose || args.pallet.is_some();
-	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
+    env_logger::init();
+    let args = Args::parse();
+    let url = args
+        .uri
+        .clone()
+        .unwrap_or(format!("wss://{}-rpc.polkadot.io:443", args.network));
+    let snap_path = format!("{}.snap", args.network);
+    let meta_path = format!("{}.meta", args.network);
+    let verbose = args.verbose || args.pallet.is_some();
 
-	let (num_keys, mut snap) = load_snapshot(&snap_path).await?;
-	let bar = ProgressBar::new(num_keys as u64);
+    let (num_keys, rx) = load_snapshot(&snap_path).await?;
+    let bar = setup_bar(num_keys);
 
-	let meta = get_metadata(&meta_path, &url).await?;
-	let pallets = meta.pallets().sorted_by(|a, b| a.name().cmp(b.name())).collect::<Vec<_>>();
+    let meta = get_metadata(&meta_path, &url).await?;
+    let pallets = meta.pallets().sorted_by(|a, b| a.name().cmp(b.name())).collect::<Vec<_>>();
 
-	let mut prefix_lookup = PrefixMap::new();
+    let prefix_lookup = build_prefix_lookup(&pallets);
 
-	for pallet in &pallets {
-		let pallet_hash = twox_128(pallet.name().as_bytes());
-		prefix_lookup.insert(pallet_hash.into(), (pallet.name().into(), None));
+    log::info!("Indexed {} known prefixes", prefix_lookup.len());
+    log::info!("Starting to categorize {} keys", num_keys);
 
-		if let Some(storage) = pallet.storage() {
-			for entry in storage.entries() {
-				let entry_hash = twox_128(entry.name().as_bytes());
-				let full_hash = [pallet_hash, entry_hash].concat();
-				prefix_lookup.insert(full_hash.into(), (pallet.name().into(), Some(entry.clone())));
-			}
-		}
-	}
+    let rx = Arc::new(Mutex::new(rx));
+    let prefix_lookup = Arc::new(prefix_lookup);
 
-	log::info!("Indexed {} known prefixes", prefix_lookup.len());
-	log::info!("Starting to categorize {} keys", num_keys);
+    let num_threads = num_cpus::get();
+    let chunk_size = num_keys / num_threads + 1;
 
-	let mut found_by_pallet = BTreeMap::<String, PalletInfo>::new();
+    let mut handles = vec![];
 
-	for _ in 0..num_keys {
-		let (key, (value, _ref_count)) = snap.recv().await.unwrap();
-		let cat = categorize_prefix(&key, &prefix_lookup);
+    for _ in 0..num_threads {
+        let rx_clone = Arc::clone(&rx);
+        let prefix_lookup_clone = Arc::clone(&prefix_lookup);
+        let bar_clone = bar.clone();
+        let handle = task::spawn(async move {
+            process_snapshot_chunk(rx_clone, prefix_lookup_clone, chunk_size, bar_clone).await
+        });
+        handles.push(handle);
+    }
 
-		match cat {
-			CategorizedKey::Item(pallet, item) => {
-				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
-					name: pallet.clone(),
-					size: 0,
-					items: BTreeMap::new(),
-				});
+    let found_by_pallet = merge_partial_results(handles).await?;
 
-				let item_info =
-					pallet_info.items.entry(item.name().to_string()).or_insert(ItemInfo {
-						name: item.name().to_string(),
-						key_len: 0,
-						value_len: 0,
-						num_entries: 0,
-					});
+    bar.finish();
+    println!();
 
-				item_info.key_len += key.len();
-				item_info.value_len += value.len();
-				item_info.num_entries += 1;
+    print_results(&found_by_pallet, verbose, &args);
 
-				pallet_info.size += key.len() + value.len();
-			},
-			CategorizedKey::Pallet(pallet) => {
-				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
-					name: pallet.clone(),
-					size: 0,
-					items: BTreeMap::new(),
-				});
-
-				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
-					name: unknown.clone(),
-					key_len: 0,
-					value_len: 0,
-					num_entries: 0,
-				});
-
-				item_info.key_len += key.len();
-				item_info.value_len += value.len();
-				item_info.num_entries += 1;
-
-				pallet_info.size += key.len() + value.len();
-			},
-			CategorizedKey::Unknown => {
-				let pallet_info = found_by_pallet.entry(unknown.clone()).or_insert(PalletInfo {
-					name: unknown.clone(),
-					size: 0,
-					items: BTreeMap::new(),
-				});
-
-				let item_info = pallet_info.items.entry(unknown.clone()).or_insert(ItemInfo {
-					name: unknown.clone(),
-					key_len: 0,
-					value_len: 0,
-					num_entries: 0,
-				});
-
-				item_info.key_len += key.len();
-				item_info.value_len += value.len();
-				item_info.num_entries += 1;
-
-				pallet_info.size += key.len() + value.len();
-			},
-		}
-
-		bar.inc(1);
-	}
-	bar.finish();
-	println!();
-
-	print_results(&found_by_pallet, verbose, &args);
-
-	Ok(())
+    Ok(())
 }
 
-type PrefixMap = BTreeMap<Vec<u8>, (String, Option<StorageEntryMetadata>)>;
+fn setup_bar(num_keys: usize) -> ProgressBar {
+	let bar = ProgressBar::new(num_keys as u64);
+	bar.set_style(ProgressStyle::default_bar().template("[{elapsed}] {bar:60.cyan/blue} {percent}% {per_sec:1}").unwrap());
+	bar.enable_steady_tick(Duration::from_millis(100));
+	bar
+}
+
+fn build_prefix_lookup(pallets: &[PalletMetadata]) -> PrefixMap {
+    let mut prefix_lookup = PrefixMap::new();
+
+    for pallet in pallets {
+        let pallet_hash = twox_128(pallet.name().as_bytes());
+        prefix_lookup.insert(pallet_hash.into(), (pallet.name().into(), None));
+
+        if let Some(storage) = pallet.storage() {
+            for entry in storage.entries() {
+                let entry_hash = twox_128(entry.name().as_bytes());
+                let full_hash = [pallet_hash, entry_hash].concat();
+                prefix_lookup.insert(full_hash.into(), (pallet.name().into(), Some(entry.clone())));
+            }
+        }
+    }
+
+    prefix_lookup
+}
+
+async fn process_snapshot_chunk(
+    rx: Arc<Mutex<Receiver<(Vec<u8>, (Vec<u8>, i32))>>>,
+    prefix_lookup: Arc<PrefixMap>,
+    chunk_size: usize,
+    bar: ProgressBar,
+) -> Map<String, PalletInfo> {
+    let mut found_by_pallet = Map::<String, PalletInfo>::new();
+    let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
+    let mut processed = 0;
+    
+    while processed < chunk_size {
+        let item = {
+            let mut rx_guard = rx.lock().unwrap();
+            rx_guard.try_recv()
+        };
+
+        match item {
+            Ok((key, (value, _ref_count))) => {
+                let cat = categorize_prefix(&key, &prefix_lookup);
+
+                match cat {
+                    CategorizedKey::Item(pallet, item) => {
+                        let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
+                            name: pallet.clone(),
+                            size: 0,
+                            items: Map::new(),
+                        });
+
+                        let item_info = pallet_info.items.entry(item.name().to_string()).or_insert(ItemInfo {
+                            name: item.name().to_string(),
+                            key_len: 0,
+                            value_len: 0,
+                            num_entries: 0,
+                        });
+
+                        item_info.key_len += key.len();
+                        item_info.value_len += value.len();
+                        item_info.num_entries += 1;
+
+                        pallet_info.size += key.len() + value.len();
+                    },
+                    CategorizedKey::Pallet(pallet) => {
+                        let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
+                            name: pallet.clone(),
+                            size: 0,
+                            items: Map::new(),
+                        });
+
+                        let item_info = pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
+                            name: unknown.to_string(),
+                            key_len: 0,
+                            value_len: 0,
+                            num_entries: 0,
+                        });
+
+                        item_info.key_len += key.len();
+                        item_info.value_len += value.len();
+                        item_info.num_entries += 1;
+
+                        pallet_info.size += key.len() + value.len();
+                    },
+                    CategorizedKey::Unknown => {
+                        let pallet_info = found_by_pallet.entry(unknown.to_string()).or_insert(PalletInfo {
+                            name: unknown.to_string(),
+                            size: 0,
+                            items: Map::new(),
+                        });
+
+                        let item_info = pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
+                            name: unknown.to_string(),
+                            key_len: 0,
+                            value_len: 0,
+                            num_entries: 0,
+                        });
+
+                        item_info.key_len += key.len();
+                        item_info.value_len += value.len();
+                        item_info.num_entries += 1;
+
+                        pallet_info.size += key.len() + value.len();
+                    },
+                }
+                processed += 1;
+                bar.inc(1);
+            },
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+            },
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => break,
+        }
+    }
+
+    found_by_pallet
+}
+
+
+async fn merge_partial_results(handles: Vec<JoinHandle<Map<String, PalletInfo>>>) -> Result<Map<String, PalletInfo>> {
+    let mut found_by_pallet = Map::<String, PalletInfo>::new();
+
+    for handle in handles {
+        let partial_result = handle.await?;
+        for (pallet, mut pallet_info) in partial_result {
+            found_by_pallet
+                .entry(pallet)
+                .and_modify(|existing| {
+                    existing.size += pallet_info.size;
+                    for (item_name, item_info) in pallet_info.items.iter_mut() {
+                        existing.items
+                            .entry(item_name.clone())
+                            .and_modify(|existing_item| {
+                                existing_item.key_len += item_info.key_len;
+                                existing_item.value_len += item_info.value_len;
+                                existing_item.num_entries += item_info.num_entries;
+                            })
+                            .or_insert_with(|| item_info.clone());
+                    }
+                })
+                .or_insert(pallet_info);
+        }
+    }
+
+    Ok(found_by_pallet)
+}
+
+type PrefixMap = Map<Vec<u8>, (String, Option<StorageEntryMetadata>)>;
 
 /// Storage size information of a pallet.
 struct PalletInfo {
@@ -193,10 +283,11 @@ struct PalletInfo {
 	name: String,
 	size: usize,
 	/// The storage items of the pallet.
-	items: BTreeMap<String, ItemInfo>,
+	items: Map<String, ItemInfo>,
 }
 
 /// Storage size information of a storage item inside a pallet.
+#[derive(Clone)]
 struct ItemInfo {
 	name: String,
 	key_len: usize,
@@ -223,14 +314,14 @@ impl From<(String, Option<StorageEntryMetadata>)> for CategorizedKey {
 	}
 }
 
-fn print_results(found_by_pallet: &BTreeMap<String, PalletInfo>, verbose: bool, args: &Args) {
+fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args: &Args) {
 	let pallet_infos = found_by_pallet
 		.values()
 		.sorted_by(|a, b| b.size.cmp(&a.size))
 		.collect::<Vec<_>>();
 
 	let network_sum = pallet_infos.iter().map(|p| p.size).sum();
-	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum), args.network));
+	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum, true), args.network));
 
 	// Print stats about how many keys per pallet and item
 	for (_p, pallet) in pallet_infos.iter().enumerate() {
@@ -246,16 +337,16 @@ fn print_results(found_by_pallet: &BTreeMap<String, PalletInfo>, verbose: bool, 
 			let key_size = pallet.items.values().map(|i| i.key_len).sum::<usize>();
 			let value_size = pallet.items.values().map(|i| i.value_len).sum::<usize>();
 			format!(
-				" ({} keys, key_size: {}, value_size: {})",
+				" ({} keys, key: {}, value: {})",
 				total_keys,
-				fmt_bytes(key_size),
-				fmt_bytes(value_size)
+				fmt_bytes(key_size, false),
+				fmt_bytes(value_size, false)
 			)
 		} else {
 			"".into()
 		};
 		let mut pallet_node =
-			Tree::new(format!("{} {}{}", fmt_bytes(pallet.size), pallet.name, suffix));
+			Tree::new(format!("{} {}{}", fmt_bytes(pallet.size, true), pallet.name, suffix));
 
 		for (_e, (_, item)) in pallet
 			.items
@@ -266,15 +357,15 @@ fn print_results(found_by_pallet: &BTreeMap<String, PalletInfo>, verbose: bool, 
 		{
 			let suffix = if verbose {
 				format!(
-					" ({} keys, key_size: {}, value_size: {})",
+					" ({} keys, key: {}, value: {})",
 					item.num_entries,
-					fmt_bytes(item.key_len),
-					fmt_bytes(item.value_len)
+					fmt_bytes(item.key_len, false),
+					fmt_bytes(item.value_len, false)
 				)
 			} else {
 				"".into()
 			};
-			let item_node = format!("{} {}{}", fmt_bytes(item.value_len), item.name, suffix);
+			let item_node = format!("{} {}{}", fmt_bytes(item.value_len + item.key_len, true), item.name, suffix);
 			pallet_node.push(item_node);
 		}
 
@@ -284,16 +375,25 @@ fn print_results(found_by_pallet: &BTreeMap<String, PalletInfo>, verbose: bool, 
 	println!("{}", pretty_tree);
 }
 
-fn fmt_bytes(bytes: usize) -> String {
-	if bytes < 1000 {
-		format!("{: >3} B", bytes)
-	} else if bytes < 1_000_000 {
-		format!("{: >3.0} K", bytes as f64 / 1000.0)
-	} else if bytes < 1_000_000_000 {
-		format!("{: >3.0} M", bytes as f64 / 1_000_000.0)
-	} else {
-		format!("{: >3.0} G", bytes as f64 / 1_000_000_000.0)
-	}
+fn fmt_bytes(number: usize, pad_left: bool) -> String {
+    let (scaled, suffix) = match number {
+        n if n >= 1_000_000_000 => (number as f64 / 1_000_000_000.0, "G"),
+        n if n >= 1_000_000 => (number as f64 / 1_000_000.0, "M"),
+        n if n >= 1_000 => (number as f64 / 1_000.0, "K"),
+        _ => (number as f64, ""),
+    };
+
+    let formatted = if scaled < 10.0 {
+        format!("{:.1} {}", scaled, suffix)
+    } else {
+        format!("{:.0} {}", scaled, suffix)
+    };
+
+    if pad_left {
+        format!("{:>3}", formatted)
+    } else {
+        formatted
+    }
 }
 
 fn categorize_prefix(key: &[u8], lookup: &PrefixMap) -> CategorizedKey {
@@ -352,7 +452,7 @@ async fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>
 
 	let storage_len = Compact::<u32>::decode(&mut input).map(|l| l.0)?;
 
-	let (tx, rx) = channel(1024);
+	let (tx, rx) = channel(1024*100);
 
 	tokio::spawn(async move {
 		for _ in 0..storage_len {
