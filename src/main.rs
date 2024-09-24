@@ -277,6 +277,15 @@ async fn merge_partial_results(handles: Vec<JoinHandle<Map<String, PalletInfo>>>
 
 type PrefixMap = Map<Vec<u8>, (String, Option<StorageEntryMetadata>)>;
 
+#[derive(Default)]
+struct NetworkInfo {
+    size: usize,
+    num_keys: usize,
+    key_size: usize,
+    num_values: usize,
+    value_size: usize,
+}
+
 /// Storage size information of a pallet.
 struct PalletInfo {
 	/// Name of the pallet.
@@ -320,8 +329,31 @@ fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args:
 		.sorted_by(|a, b| b.size.cmp(&a.size))
 		.collect::<Vec<_>>();
 
-	let network_sum = pallet_infos.iter().map(|p| p.size).sum();
-	let mut pretty_tree = Tree::new(format!("{} {}", fmt_bytes(network_sum, true), args.network));
+        let network_info = pallet_infos.iter().fold(NetworkInfo::default(), |acc, p| {
+            let key_size = p.items.values().map(|i| i.key_len).sum::<usize>();
+            let value_size = p.items.values().map(|i| i.value_len).sum::<usize>();
+            let num_keys = p.items.values().map(|i| i.num_entries).sum::<usize>();
+            
+            NetworkInfo {
+                size: acc.size + p.size,
+                num_keys: acc.num_keys + num_keys,
+                key_size: acc.key_size + key_size,
+                num_values: acc.num_values + num_keys,
+                value_size: acc.value_size + value_size,
+            }
+        });
+
+        let suffix = if verbose {
+            format!(
+                " ({} keys, key: {}, value: {})",
+                network_info.num_keys,
+                fmt_bytes(network_info.key_size, false),
+                fmt_bytes(network_info.value_size, false)
+            )
+        } else {
+            "".into()
+        };
+	let mut pretty_tree = Tree::new(format!("{} {}{suffix}", fmt_bytes(network_info.size, true), args.network));
 
 	// Print stats about how many keys per pallet and item
 	for (_p, pallet) in pallet_infos.iter().enumerate() {
