@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
     let meta_path = format!("{}.meta", args.network);
     let verbose = args.verbose || args.pallet.is_some();
 
-    let (num_keys, rx) = load_snapshot(&snap_path).await?;
+    let (num_keys, rx) = load_snapshot(&snap_path)?;
     let bar = setup_bar(num_keys);
 
     let meta = get_metadata(&meta_path, &url).await?;
@@ -466,7 +466,11 @@ async fn get_metadata(path: &str, url: &str) -> Result<Metadata> {
 	Ok(meta)
 }
 
-async fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>, i32))>)> {
+/// Load a try-runtime-cli snapshot from a path.
+///
+/// Returns the total number of keys in the snapshot and a channel that can be used to read exactly
+/// that many Key-Value pairs.
+fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>, i32))>)> {
 	log::info!("Loading snapshot from file");
 	let file = File::open(path)
 		.map_err(|e| anyhow!("Failed to load snapshot file from {}: {}", path, e))?;
@@ -482,12 +486,12 @@ async fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>
 		log::warn!("State version is not 1 but {}", state_version);
 	}
 
-	let storage_len = Compact::<u32>::decode(&mut input).map(|l| l.0)?;
+	let num_keys = Compact::<u32>::decode(&mut input).map(|l| l.0)?;
 
 	let (tx, rx) = channel(1024*100);
 
 	tokio::spawn(async move {
-		for _ in 0..storage_len {
+		for _ in 0..num_keys {
 			let key = Vec::<u8>::decode(&mut input).unwrap();
 
 			let value = Vec::<u8>::decode(&mut input).unwrap();
@@ -497,5 +501,5 @@ async fn load_snapshot(path: &str) -> Result<(usize, Receiver<(Vec<u8>, (Vec<u8>
 		}
 	});
 
-	Ok((storage_len as usize, rx))
+	Ok((num_keys as usize, rx))
 }
