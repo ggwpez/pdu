@@ -10,6 +10,9 @@ pub struct Chainspec {
 	#[clap(long, short)]
 	snapshot_path: String,
 
+	#[clap(long)]
+	snapshot_out_path: String,
+
 	#[clap(long, short)]
 	chainspec_path: String,
 
@@ -82,7 +85,7 @@ impl Chainspec {
 		}
 
 		// Write back to the chainspec JSON file
-		let mut file = std::fs::File::create(&self.chainspec_path)?;
+		let mut file = std::fs::File::create(&self.snapshot_out_path)?;
 		serde_json::to_writer_pretty(&mut file, &chainspec)?;
 
 		Ok(())
