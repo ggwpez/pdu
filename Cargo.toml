@@ -28,10 +28,10 @@ termtree = "0.5.1"
 ansi_term = "0.12"
 num_cpus = "1.16.0"
 
-frame-remote-externalities = { version = "*", optional = true }
-sp-runtime = { version = "*", optional = true }
-sp-io = { version = "*", optional = true }
-frame-support = { version = "*", optional = true }
+frame-remote-externalities = { git = "https://github.com/paritytech/polkadot-sdk", rev = "8279d1046cca51a317dec15df5a9b29240545163", optional = true }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", rev = "8279d1046cca51a317dec15df5a9b29240545163", optional = true }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk", rev = "8279d1046cca51a317dec15df5a9b29240545163", optional = true }
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", rev = "8279d1046cca51a317dec15df5a9b29240545163", optional = true }
 
 [features]
 chainspec = ["frame-remote-externalities", "sp-runtime", "sp-io", "frame-support"]
