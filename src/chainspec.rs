@@ -39,9 +39,10 @@ impl Chainspec {
 	pub async fn run(&self) -> Result<()> {
 		let mut ext = self.externalities().await?;
 		let mut kvs = Vec::<(Vec<u8>, Vec<u8>)>::new();
+		let pallets = self.pallets.split(",").collect::<Vec<&str>>();
 
 		ext.execute_with(|| {
-			for pallet in &self.pallets {
+			for pallet in &pallets {
 				println!("Pallet: {}", pallet);
 				let pallet_prefix = twox_128(pallet.as_bytes()).to_vec();
 
