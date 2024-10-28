@@ -54,9 +54,25 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use subxt_metadata::PalletMetadata;
 
+#[cfg(feature = "chainspec")]
+mod chainspec;
+
+#[derive(Parser)]
+struct Root {
+    #[clap(subcommand)]
+	cmd: SubCommand,
+}
+
+#[derive(Parser)]
+enum SubCommand {
+    Info(Info),
+    #[cfg(feature = "chainspec")]
+    Chainspec(chainspec::Chainspec),
+}
+
 /// PDU - Polkadot runtime storage analyzer.
 #[derive(Parser)]
-struct Args {
+struct Info {
 	/// Name of the network to analyze.
 	#[clap(short, long)]
 	network: String,
@@ -76,53 +92,64 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
-    let args = Args::parse();
-    let url = args
-        .uri
-        .clone()
-        .unwrap_or(format!("wss://{}-rpc.polkadot.io:443", args.network));
-    let snap_path = format!("{}.snap", args.network);
-    let meta_path = format!("{}.meta", args.network);
-    let verbose = args.verbose || args.pallet.is_some();
+    let root = Root::parse();
 
-    let (num_keys, rx) = load_snapshot(&snap_path)?;
-    let bar = setup_bar(num_keys);
-
-    let meta = get_metadata(&meta_path, &url).await?;
-    let pallets = meta.pallets().sorted_by(|a, b| a.name().cmp(b.name())).collect::<Vec<_>>();
-
-    let prefix_lookup = build_prefix_lookup(&pallets);
-
-    log::info!("Indexed {} known prefixes", prefix_lookup.len());
-    log::info!("Starting to categorize {} keys", num_keys);
-
-    let rx = Arc::new(Mutex::new(rx));
-    let prefix_lookup = Arc::new(prefix_lookup);
-
-    let num_threads = num_cpus::get();
-    let chunk_size = num_keys / num_threads + 1;
-
-    let mut handles = vec![];
-
-    for _ in 0..num_threads {
-        let rx_clone = Arc::clone(&rx);
-        let prefix_lookup_clone = Arc::clone(&prefix_lookup);
-        let bar_clone = bar.clone();
-        let handle = task::spawn(async move {
-            process_snapshot_chunk(rx_clone, prefix_lookup_clone, chunk_size, bar_clone).await
-        });
-        handles.push(handle);
+    match root.cmd {
+        SubCommand::Info(info) => info.run().await,
+        #[cfg(feature = "chainspec")]
+        SubCommand::Chainspec(chainspec) => chainspec.run().await,
     }
+}
 
-    let found_by_pallet = merge_partial_results(handles).await?;
+impl Info {
+    pub async fn run(&self) -> Result<()> {
+        env_logger::init();
+        let url = self
+            .uri
+            .clone()
+            .unwrap_or(format!("wss://{}-rpc.polkadot.io:443", self.network));
+        let snap_path = format!("{}.snap", self.network);
+        let meta_path = format!("{}.meta", self.network);
+        let verbose = self.verbose || self.pallet.is_some();
 
-    bar.finish();
-    println!();
+        let (num_keys, rx) = load_snapshot(&snap_path)?;
+        let bar = setup_bar(num_keys);
 
-    print_results(&found_by_pallet, verbose, &args);
+        let meta = get_metadata(&meta_path, &url).await?;
+        let pallets = meta.pallets().sorted_by(|a, b| a.name().cmp(b.name())).collect::<Vec<_>>();
 
-    Ok(())
+        let prefix_lookup = build_prefix_lookup(&pallets);
+
+        log::info!("Indexed {} known prefixes", prefix_lookup.len());
+        log::info!("Starting to categorize {} keys", num_keys);
+
+        let rx = Arc::new(Mutex::new(rx));
+        let prefix_lookup = Arc::new(prefix_lookup);
+
+        let num_threads = num_cpus::get();
+        let chunk_size = num_keys / num_threads + 1;
+
+        let mut handles = vec![];
+
+        for _ in 0..num_threads {
+            let rx_clone = Arc::clone(&rx);
+            let prefix_lookup_clone = Arc::clone(&prefix_lookup);
+            let bar_clone = bar.clone();
+            let handle = task::spawn(async move {
+                process_snapshot_chunk(rx_clone, prefix_lookup_clone, chunk_size, bar_clone).await
+            });
+            handles.push(handle);
+        }
+
+        let found_by_pallet = merge_partial_results(handles).await?;
+
+        bar.finish();
+        println!();
+
+        print_results(&found_by_pallet, verbose, &self);
+
+        Ok(())
+    }
 }
 
 fn setup_bar(num_keys: usize) -> ProgressBar {
@@ -323,7 +350,7 @@ impl From<(String, Option<StorageEntryMetadata>)> for CategorizedKey {
 	}
 }
 
-fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args: &Args) {
+fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args: &Info) {
 	let pallet_infos = found_by_pallet
 		.values()
 		.sorted_by(|a, b| b.size.cmp(&a.size))
