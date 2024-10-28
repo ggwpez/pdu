@@ -18,7 +18,7 @@ pub struct Chainspec {
 
 	/// Export state of these pallets.
 	#[clap(long, short)]
-	pallets: Vec<String>,
+	pallets: String,
 }
 
 use sp_runtime::{
