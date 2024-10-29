@@ -82,8 +82,9 @@ impl Chainspec {
 			.unwrap();
 		
 		for (key, value) in kvs {
-			let v = "0x" + hex::encode(value);
-			top.insert(hex::encode(key), serde_json::Value::String(v));
+			let v = "0x".to_string() + &hex::encode(value);
+			let k = "0x".to_string() + &hex::encode(key);
+			top.insert(k, serde_json::Value::String(v));
 		}
 
 		// Write back to the chainspec JSON file
