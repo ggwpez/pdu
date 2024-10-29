@@ -11,7 +11,7 @@ pub struct Chainspec {
 	snapshot_path: String,
 
 	#[clap(long)]
-	snapshot_out_path: String,
+	chainspec_out_path: String,
 
 	#[clap(long, short)]
 	chainspec_path: String,
@@ -82,11 +82,12 @@ impl Chainspec {
 			.unwrap();
 		
 		for (key, value) in kvs {
-			top.insert(hex::encode(key), serde_json::Value::String(hex::encode(value)));
+			let v = "0x" + hex::encode(value);
+			top.insert(hex::encode(key), serde_json::Value::String(v));
 		}
 
 		// Write back to the chainspec JSON file
-		let mut file = std::fs::File::create(&self.snapshot_out_path)?;
+		let mut file = std::fs::File::create(&self.chainspec_out_path)?;
 		serde_json::to_writer_pretty(&mut file, &chainspec)?;
 
 		Ok(())
