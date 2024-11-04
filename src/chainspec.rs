@@ -1,9 +1,16 @@
+//! Module to parse a try-runtime snapshot and extract specific storage prefixes into a chainspec file.
+//!
+//! This can be useful when you want to start a new network with a genesis state that contains production data.
+
 use frame_remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig, Transport,
 };
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use sp_crypto_hashing::twox_128;
+use sp_crypto_hashing::{twox_128, blake2_256};
+use parity_scale_codec::Encode;
+use parity_scale_codec::Decode;
+use frame_support::StorageHasher;
 
 #[derive(Parser)]
 pub struct Chainspec {
@@ -19,6 +26,12 @@ pub struct Chainspec {
 	/// Export state of these pallets.
 	#[clap(long, short)]
 	pallets: String,
+
+	/// Insert some accounts into the genesis state.
+	///
+	/// This will affect prefix `xx(System)
+	#[clap(long)]
+	dev_accounts: Option<u32>,
 }
 
 use sp_runtime::{
@@ -85,6 +98,30 @@ impl Chainspec {
 			let v = "0x".to_string() + &hex::encode(value);
 			let k = "0x".to_string() + &hex::encode(key);
 			top.insert(k, serde_json::Value::String(v));
+		}
+
+		if self.dev_accounts.is_some() {
+			let pallet_prefix = twox_128(b"System");
+			let storage_prefix = twox_128(b"Account");
+			let account_prefix = pallet_prefix
+				.iter()
+				.chain(storage_prefix.iter())
+				.cloned()
+				.collect::<Vec<_>>();
+			let value = hex::decode("000000000000000001000000000000000c72b888e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080").unwrap();
+
+			let n = self.dev_accounts.unwrap_or(0);
+			for i in 0..n {
+				let acc = sp_runtime::AccountId32::decode(&mut &blake2_256(&i.encode())[..]).unwrap();
+
+				let key = frame_support::Blake2_128Concat::hash(&acc.encode());
+				let final_key = account_prefix.iter().chain(key.iter()).cloned().collect::<Vec<_>>();
+
+				let v = "0x".to_string() + &hex::encode(&value);
+				let k = "0x".to_string() + &hex::encode(final_key);
+				top.insert(k, serde_json::Value::String(v));
+			}
+			println!("Inserted {} dev accounts", n);
 		}
 
 		// Write back to the chainspec JSON file
