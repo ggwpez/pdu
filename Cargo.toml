@@ -33,3 +33,4 @@ sp-runtime = { version = "39.0.1" }
 sp-io = { version = "38.0.0" }
 frame-support = { version = "38.0.0" }
 serde = { version = "1.0.217", features = ["derive"] }
+sp-application-crypto = "38.0.0"
