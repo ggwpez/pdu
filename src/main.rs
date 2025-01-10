@@ -74,9 +74,6 @@ type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Opaque block type.
 type Block = generic::Block<Header, OpaqueExtrinsic>;
 
-#[cfg(feature = "chainspec")]
-mod chainspec;
-
 #[derive(Parser)]
 struct Root {
 	#[clap(subcommand)]
@@ -86,8 +83,6 @@ struct Root {
 #[derive(Parser)]
 enum SubCommand {
 	Info(Info),
-	#[cfg(feature = "chainspec")]
-	Chainspec(chainspec::Chainspec),
 }
 
 /// PDU - Polkadot runtime storage analyzer.
