@@ -17,24 +17,25 @@ small. You will need the
 full or archive node to download the state from:
 
 ```sh
-try-runtime create-snapshot --uri wss://rococo-people-rpc.polkadot.io:443 rococo-people.snap
+try-runtime create-snapshot --uri wss://sys.ibp.network:443/statemint ah-polkadot.snap
 ```
 
 Then run the analysis:
 
 ```sh
-cargo run --release -- --network rococo-people
+cargo run -r -- info --snap ah-polkadot.snap --rpc wss://sys.ibp.network:443/statemint
 ```
 
 The results will be a bit boring for such a small network, but for a larger one - eg Kusama - it
-could look like this. You can download [this snapshot](https://tasty.limo/kusama.snap) to try it.
+could look like this. The results will also be written into a JSON file named `kusama_storage.json`.
+You can download [this snapshot](https://tasty.limo/kusama.snap) to try it.
 
 ![Kusama storage analysis](./.images/ksm-overview.png)
 
 You can also zoom in on a specific pallet:
 
 ```sh
-cargo run --release -- --network rococo-people --pallet Balances
+cargo run -r -- info --snap ah-polkadot.snap --rpc wss://sys.ibp.network:443/statemint --pallet System
 ```
 
 Again for Kusama:
