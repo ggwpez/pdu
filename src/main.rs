@@ -39,18 +39,13 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use frame_remote_externalities::{
-	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig, Transport,
+	Builder, Mode, OfflineConfig, RemoteExternalities, SnapshotConfig,
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_crypto_hashing::twox_128;
-use sp_runtime::{
-	generic,
-	traits::{BlakeTwo256, Block as BlockT},
-	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, OpaqueExtrinsic,
-};
+use sp_runtime::{generic, traits::BlakeTwo256, OpaqueExtrinsic};
 use std::{
 	collections::BTreeMap as Map,
 	fs::File,
@@ -226,7 +221,6 @@ async fn process_snapshot_chunk(
 ) -> Map<String, PalletInfo> {
 	let mut found_by_pallet = Map::<String, PalletInfo>::new();
 	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
-	let mut processed = 0;
 
 	loop {
 		let item = {
@@ -306,7 +300,6 @@ async fn process_snapshot_chunk(
 						pallet_info.size += key.len() + value.len();
 					},
 				}
-				processed += 1;
 				bar.inc(1);
 			},
 			Ok(None) => break,
