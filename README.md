@@ -5,7 +5,7 @@ Investigate storage size of Substrate chains.
 Install with: 
 
 ```sh
-cargo install polkadot-du
+cargo install polkadot-du --locked
 pdu --help
 ```
 
