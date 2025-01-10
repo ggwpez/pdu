@@ -1,16 +1,17 @@
-//! Module to parse a try-runtime snapshot and extract specific storage prefixes into a chainspec file.
+//! Module to parse a try-runtime snapshot and extract specific storage prefixes into a chainspec
+//! file.
 //!
-//! This can be useful when you want to start a new network with a genesis state that contains production data.
+//! This can be useful when you want to start a new network with a genesis state that contains
+//! production data.
 
+use anyhow::{anyhow, Result};
+use clap::Parser;
 use frame_remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig, Transport,
 };
-use anyhow::{anyhow, Result};
-use clap::Parser;
-use sp_crypto_hashing::{twox_128, blake2_256};
-use parity_scale_codec::Encode;
-use parity_scale_codec::Decode;
 use frame_support::StorageHasher;
+use parity_scale_codec::{Decode, Encode};
+use sp_crypto_hashing::{blake2_256, twox_128};
 
 #[derive(Parser)]
 pub struct Chainspec {
@@ -62,15 +63,15 @@ impl Chainspec {
 				let mut key = pallet_prefix.clone();
 				loop {
 					match sp_io::storage::next_key(&key) {
-						Some(next_key) => {
+						Some(next_key) =>
 							if next_key.starts_with(&pallet_prefix) {
 								key = next_key;
-								let value = frame_support::storage::unhashed::get_raw(&key).unwrap();
+								let value =
+									frame_support::storage::unhashed::get_raw(&key).unwrap();
 								kvs.push((key.clone(), value.clone()));
 							} else {
 								break;
-							}
-						}
+							},
 						None => break,
 					}
 				}
@@ -93,7 +94,7 @@ impl Chainspec {
 			.unwrap()
 			.as_object_mut()
 			.unwrap();
-		
+
 		for (key, value) in kvs {
 			let v = "0x".to_string() + &hex::encode(value);
 			let k = "0x".to_string() + &hex::encode(key);
@@ -103,19 +104,18 @@ impl Chainspec {
 		if self.dev_accounts.is_some() {
 			let pallet_prefix = twox_128(b"System");
 			let storage_prefix = twox_128(b"Account");
-			let account_prefix = pallet_prefix
-				.iter()
-				.chain(storage_prefix.iter())
-				.cloned()
-				.collect::<Vec<_>>();
+			let account_prefix =
+				pallet_prefix.iter().chain(storage_prefix.iter()).cloned().collect::<Vec<_>>();
 			let value = hex::decode("000000000000000001000000000000000c72b888e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080").unwrap();
 
 			let n = self.dev_accounts.unwrap_or(0);
 			for i in 0..n {
-				let acc = sp_runtime::AccountId32::decode(&mut &blake2_256(&i.encode())[..]).unwrap();
+				let acc =
+					sp_runtime::AccountId32::decode(&mut &blake2_256(&i.encode())[..]).unwrap();
 
 				let key = frame_support::Blake2_128Concat::hash(&acc.encode());
-				let final_key = account_prefix.iter().chain(key.iter()).cloned().collect::<Vec<_>>();
+				let final_key =
+					account_prefix.iter().chain(key.iter()).cloned().collect::<Vec<_>>();
 
 				let v = "0x".to_string() + &hex::encode(&value);
 				let k = "0x".to_string() + &hex::encode(final_key);
@@ -135,9 +135,7 @@ impl Chainspec {
 		let config = SnapshotConfig::new(self.snapshot_path.clone());
 
 		Builder::<Block>::default()
-			.mode(Mode::Offline(
-					OfflineConfig { state_snapshot: config.clone() },
-				))
+			.mode(Mode::Offline(OfflineConfig { state_snapshot: config.clone() }))
 			.build()
 			.await
 			.map_err(|e| anyhow!("Failed to create externalities: {:?}", e))
