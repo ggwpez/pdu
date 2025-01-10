@@ -5,11 +5,11 @@ Investigate storage size of Substrate chains.
 Install with: 
 
 ```sh
-cargo install polkadot-du
+cargo install polkadot-du --locked
 pdu --help
 ```
 
-### Example
+### Example: Info
 
 First acquire a state snapshot. We are going to use the People Rococo chain, since it is rather
 small. You will need the
@@ -41,6 +41,14 @@ cargo run -r -- info --snap ah-polkadot.snap --rpc wss://sys.ibp.network:443/sta
 Again for Kusama:
 
 ![Kusama Balances pallet](./.images/ksm-zoom.png)
+
+### Example: Grep
+
+Search for an SS58 account address across the storage snapshot:
+
+```bash
+pdu grep --snap ../runtimes/polkadot.snap --rpc wss://sys.ibp.network:443/statemint address "15kr2dkeJQuCAfBQqZjnPeqmoMTWarRMxAGWPnfSmWdaVcbi"
+```
 
 ### License
 
