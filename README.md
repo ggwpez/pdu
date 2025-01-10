@@ -47,7 +47,7 @@ Again for Kusama:
 Search for an SS58 account address across the storage snapshot:
 
 ```bash
-pdu grep --snap ../runtimes/polkadot.snap --rpc wss://sys.ibp.network:443/statemint address "15kr2dkeJQuCAfBQqZjnPeqmoMTWarRMxAGWPnfSmWdaVcbi
+pdu grep --snap ../runtimes/polkadot.snap --rpc wss://sys.ibp.network:443/statemint address "15kr2dkeJQuCAfBQqZjnPeqmoMTWarRMxAGWPnfSmWdaVcbi"
 ```
 
 ### License
