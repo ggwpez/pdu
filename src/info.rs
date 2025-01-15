@@ -36,6 +36,10 @@ pub struct Info {
 	/// Print verbose information.
 	#[clap(long)]
 	verbose: bool,
+
+	/// Output results into a JSON file.
+	#[clap(long)]
+	json: Option<String>,
 }
 
 impl Info {
@@ -79,7 +83,9 @@ impl Info {
 		println!();
 
 		print_results(&found_by_pallet, verbose, &self);
-		write_results_to_json(&found_by_pallet, &self)?;
+		if let Some(json_path) = &self.json {
+			write_results_to_json(&found_by_pallet, &self, json_path)?;
+		}
 
 		Ok(())
 	}
@@ -385,7 +391,11 @@ struct JsonItemInfo {
 	num_entries: usize,
 }
 
-fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info) -> Result<()> {
+fn write_results_to_json(
+	found_by_pallet: &Map<String, PalletInfo>,
+	args: &Info,
+	json_path: &str,
+) -> Result<()> {
 	let pallet_infos: Vec<JsonPalletInfo> = found_by_pallet
 		.iter()
 		.map(|(_, pallet)| JsonPalletInfo {
@@ -437,9 +447,8 @@ fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info)
 		"pallets": pallet_infos,
 	});
 
-	let json_file_path = format!("{}_storage.json", args.network());
-	std::fs::write(&json_file_path, serde_json::to_string_pretty(&output)?)?;
-	log::info!("Results written to {}", json_file_path);
+	std::fs::write(json_path, serde_json::to_string_pretty(&output)?)?;
+	log::info!("Results written to {}", json_path);
 
 	Ok(())
 }

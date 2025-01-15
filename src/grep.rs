@@ -117,7 +117,7 @@ impl GrepSearchAddress {
 					println!("KEY MATCH '{}' 0x{}", info.name(), hex::encode(k));
 				},
 				(None, Some(v)) => {
-					println!("VALUE MATCH '{}' 0x{}", info.name(), hex::encode(v));
+					println!("VALUE MATCH '{}' 0x{} => 0x{}", info.name(), hex::encode(key), hex::encode(v));
 				},
 				_ => unreachable!(),
 			}
