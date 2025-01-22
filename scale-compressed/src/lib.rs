@@ -45,7 +45,7 @@ impl<T: TypeInfo + 'static> TypeInfo for ScaleCompressed<T> {
 
 		Type::builder()
 			.path(Path::new("ScaleCompressed", module_path!()))
-			.type_params(vec![TypeParameter::new(
+			.type_params([TypeParameter::new(
 				"T",
 				Some(meta_type::<T>()),
 			)])
