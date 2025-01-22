@@ -16,7 +16,12 @@
 //! assert_eq!(vec![1, 2, 3, 4, 5], decoded.0);
 //! ```
 
+// No std support
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use parity_scale_codec::{Decode, Encode, Error, Input, Output};
+extern crate alloc;
+use alloc::vec::Vec;
 
 /// Wrap a struct to be compressed for encoding.
 pub struct ScaleCompressed<T>(pub T);
