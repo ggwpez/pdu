@@ -5101,9 +5101,9 @@ dependencies = [
  "indicatif",
  "itertools 0.14.0",
  "log",
- "miniz_oxide",
  "num_cpus",
  "parity-scale-codec",
+ "scale-compressed",
  "serde",
  "serde_json",
  "sp-application-crypto",
@@ -6596,6 +6596,16 @@ dependencies = [
  "scale-info",
  "scale-type-resolver",
  "serde",
+]
+
+[[package]]
+name = "scale-compressed"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2266a401517265834d10f496b78d2e0fcb509050dfa697e54c7826e6b4f2e343"
+dependencies = [
+ "miniz_oxide",
+ "parity-scale-codec",
 ]
 
 [[package]]
