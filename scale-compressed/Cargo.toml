@@ -1,0 +1,12 @@
+[package]
+name = "scale-compressed"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0 OR Apache-2.0"
+repository = "https://github.com/ggwpez/pdu"
+description = "Compress SCALE encoded data"
+
+
+[dependencies]
+miniz_oxide = "0.8.3"
+parity-scale-codec = { version = "3.6.12", default-features = false }

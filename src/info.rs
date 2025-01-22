@@ -59,7 +59,7 @@ impl Info {
 		let rx = Arc::new(Mutex::new(rx));
 		let prefix_lookup = Arc::new(prefix_lookup);
 
-		let num_threads = num_cpus::get().max(2) ;
+		let num_threads = num_cpus::get().max(2);
 
 		let mut handles = vec![];
 
@@ -243,7 +243,7 @@ async fn process_snapshot_chunk(
 
 /// Worst case compression size using no-std `lzss`.
 fn compress_size(data: &[u8]) -> usize {
-	miniz_oxide::deflate::compress_to_vec(data, 6).len()
+	miniz_oxide::deflate::compress_to_vec(data, 1).len()
 }
 
 async fn merge_partial_results(
