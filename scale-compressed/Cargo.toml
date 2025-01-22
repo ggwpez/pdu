@@ -8,9 +8,9 @@ description = "Compress SCALE encoded data"
 readme = "README.md"
 
 [dependencies]
-miniz_oxide = "0.8.3"
-parity-scale-codec = { version = "3.6.12", default-features = false }
-scale-info = { version = "2.11.6", default-features = false, optional = true }
+miniz_oxide = "0.8"
+parity-scale-codec = { version = "3.6", default-features = false }
+scale-info = { version = "2.11", default-features = false, optional = true }
 
 [features]
 std = []
