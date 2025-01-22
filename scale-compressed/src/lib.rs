@@ -19,6 +19,9 @@
 // No std support
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "scale-info")]
+use scale_info::{TypeInfo, Type};
+
 use parity_scale_codec::{Decode, Encode, Error, Input, Output};
 extern crate alloc;
 use alloc::vec::Vec;
@@ -29,6 +32,43 @@ pub struct ScaleCompressed<T>(pub T);
 impl<T> ScaleCompressed<T> {
 	pub fn new(inner: T) -> Self {
 		Self(inner)
+	}
+}
+
+#[cfg(feature = "scale-info")]
+impl<T: TypeInfo + 'static> TypeInfo for ScaleCompressed<T> {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		use scale_info::*;
+
+		Type::builder()
+			.path(Path::new("ScaleCompressed", module_path!()))
+			.type_params(vec![TypeParameter::new(
+				"T",
+				Some(meta_type::<T>()),
+			)])
+			.composite(scale_info::build::Fields::unnamed()
+				.field(|f| f.ty::<T>().type_name("T")),
+		)
+	}
+}
+
+impl<T: Clone> Clone for ScaleCompressed<T> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
+impl<T: Debug> Debug for ScaleCompressed<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ScaleCompressed({:?})", self.0)
+	}
+}
+
+impl<T: PartialEq> PartialEq for ScaleCompressed<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
 	}
 }
 
