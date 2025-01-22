@@ -59,7 +59,7 @@ impl Info {
 		let rx = Arc::new(Mutex::new(rx));
 		let prefix_lookup = Arc::new(prefix_lookup);
 
-		let num_threads = num_cpus::get().max(2);
+		let num_threads = num_cpus::get().max(2) ;
 
 		let mut handles = vec![];
 
@@ -137,89 +137,113 @@ async fn process_snapshot_chunk(
 			rx_guard.try_recv()
 		};
 
-		match item {
-			Ok(Some((key, value))) => {
-				let cat = categorize_prefix(&key, &prefix_lookup);
-
-				match cat {
-					CategorizedKey::Item(pallet, item) => {
-						let pallet_info =
-							found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
-								name: pallet.clone(),
-								size: 0,
-								items: Map::new(),
-							});
-
-						let item_info =
-							pallet_info.items.entry(item.name().to_string()).or_insert(ItemInfo {
-								name: item.name().to_string(),
-								key_len: 0,
-								value_len: 0,
-								num_entries: 0,
-							});
-
-						item_info.key_len += key.len();
-						item_info.value_len += value.len();
-						item_info.num_entries += 1;
-
-						pallet_info.size += key.len() + value.len();
-					},
-					CategorizedKey::Pallet(pallet) => {
-						let pallet_info =
-							found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
-								name: pallet.clone(),
-								size: 0,
-								items: Map::new(),
-							});
-
-						let item_info =
-							pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
-								name: unknown.to_string(),
-								key_len: 0,
-								value_len: 0,
-								num_entries: 0,
-							});
-
-						item_info.key_len += key.len();
-						item_info.value_len += value.len();
-						item_info.num_entries += 1;
-
-						pallet_info.size += key.len() + value.len();
-					},
-					CategorizedKey::Unknown => {
-						let pallet_info =
-							found_by_pallet.entry(unknown.to_string()).or_insert(PalletInfo {
-								name: unknown.to_string(),
-								size: 0,
-								items: Map::new(),
-							});
-
-						let item_info =
-							pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
-								name: unknown.to_string(),
-								key_len: 0,
-								value_len: 0,
-								num_entries: 0,
-							});
-
-						item_info.key_len += key.len();
-						item_info.value_len += value.len();
-						item_info.num_entries += 1;
-
-						pallet_info.size += key.len() + value.len();
-					},
-				}
-				bar.inc(1);
+		let (key, value) = match item {
+			Ok(Some((key, value))) => (key, value),
+			Ok(None) => {
+				break;
 			},
-			Ok(None) => break,
 			Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
 				tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+				continue;
 			},
 			Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => break,
+		};
+
+		let cat = categorize_prefix(&key, &prefix_lookup);
+		let compressed_key_len = compress_size(&key);
+		let compressed_value_len = compress_size(&value);
+
+		match cat {
+			CategorizedKey::Item(pallet, item) => {
+				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
+					name: pallet.clone(),
+					size: 0,
+					compressed_size: 0,
+					items: Map::new(),
+				});
+
+				let item_info =
+					pallet_info.items.entry(item.name().to_string()).or_insert(ItemInfo {
+						name: item.name().to_string(),
+						key_len: 0,
+						compressed_key_len: 0,
+						value_len: 0,
+						compressed_value_len: 0,
+						num_entries: 0,
+					});
+
+				item_info.key_len += key.len();
+				item_info.compressed_key_len += compressed_key_len;
+				item_info.value_len += value.len();
+				item_info.compressed_value_len += compressed_value_len;
+				item_info.num_entries += 1;
+
+				pallet_info.compressed_size += compressed_key_len + compressed_value_len;
+				pallet_info.size += key.len() + value.len();
+			},
+			CategorizedKey::Pallet(pallet) => {
+				let pallet_info = found_by_pallet.entry(pallet.clone()).or_insert(PalletInfo {
+					name: pallet.clone(),
+					size: 0,
+					compressed_size: 0,
+					items: Map::new(),
+				});
+
+				let item_info = pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
+					name: unknown.to_string(),
+					key_len: 0,
+					compressed_key_len: 0,
+					value_len: 0,
+					compressed_value_len: 0,
+					num_entries: 0,
+				});
+
+				item_info.key_len += key.len();
+				item_info.compressed_key_len += compressed_key_len;
+				item_info.value_len += value.len();
+				item_info.compressed_value_len += compressed_value_len;
+				item_info.num_entries += 1;
+
+				pallet_info.compressed_size += compressed_key_len + compressed_value_len;
+				pallet_info.size += key.len() + value.len();
+			},
+			CategorizedKey::Unknown => {
+				let pallet_info =
+					found_by_pallet.entry(unknown.to_string()).or_insert(PalletInfo {
+						name: unknown.to_string(),
+						size: 0,
+						compressed_size: 0,
+						items: Map::new(),
+					});
+
+				let item_info = pallet_info.items.entry(unknown.to_string()).or_insert(ItemInfo {
+					name: unknown.to_string(),
+					key_len: 0,
+					compressed_key_len: 0,
+					value_len: 0,
+					compressed_value_len: 0,
+					num_entries: 0,
+				});
+
+				item_info.key_len += key.len();
+				item_info.compressed_key_len += compressed_key_len;
+				item_info.value_len += value.len();
+				item_info.compressed_value_len += compressed_value_len;
+				item_info.num_entries += 1;
+
+				pallet_info.compressed_size += compressed_key_len + compressed_value_len;
+				pallet_info.size += key.len() + value.len();
+			},
 		}
+		bar.inc(1);
 	}
 
 	found_by_pallet
+}
+
+/// Worst case compression size using no-std `lzss`.
+fn compress_size(data: &[u8]) -> usize {
+	miniz_oxide::deflate::compress_to_vec(data, 6).len()
 }
 
 async fn merge_partial_results(
@@ -258,8 +282,11 @@ struct NetworkInfo {
 	size: usize,
 	num_keys: usize,
 	key_size: usize,
+	compressed_key_size: usize,
 	num_values: usize,
 	value_size: usize,
+	compressed_value_size: usize,
+	compressed_size: usize,
 }
 
 /// Storage size information of a pallet.
@@ -267,6 +294,7 @@ struct PalletInfo {
 	/// Name of the pallet.
 	name: String,
 	size: usize,
+	compressed_size: usize,
 	/// The storage items of the pallet.
 	items: Map<String, ItemInfo>,
 }
@@ -276,7 +304,9 @@ struct PalletInfo {
 struct ItemInfo {
 	name: String,
 	key_len: usize,
+	compressed_key_len: usize,
 	value_len: usize,
+	compressed_value_len: usize,
 	num_entries: usize,
 }
 
@@ -289,23 +319,29 @@ fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args:
 	let network_info = pallet_infos.iter().fold(NetworkInfo::default(), |acc, p| {
 		let key_size = p.items.values().map(|i| i.key_len).sum::<usize>();
 		let value_size = p.items.values().map(|i| i.value_len).sum::<usize>();
+		let compressed_key_size = p.items.values().map(|i| i.compressed_key_len).sum::<usize>();
+		let compressed_value_size = p.items.values().map(|i| i.compressed_value_len).sum::<usize>();
 		let num_keys = p.items.values().map(|i| i.num_entries).sum::<usize>();
 
 		NetworkInfo {
 			size: acc.size + p.size,
+			compressed_size: acc.compressed_size + p.compressed_size,
 			num_keys: acc.num_keys + num_keys,
 			key_size: acc.key_size + key_size,
+			compressed_key_size: acc.compressed_key_size + compressed_key_size,
 			num_values: acc.num_values + num_keys,
 			value_size: acc.value_size + value_size,
+			compressed_value_size: acc.compressed_value_size + compressed_value_size,
 		}
 	});
 
 	let suffix = if verbose {
 		format!(
-			" ({} keys, key: {}, value: {})",
+			" ({} keys, key: {}, value: {}, compressed: {})",
 			network_info.num_keys,
 			fmt_bytes(network_info.key_size, false),
-			fmt_bytes(network_info.value_size, false)
+			fmt_bytes(network_info.value_size, false),
+			fmt_bytes(network_info.compressed_size, false)
 		)
 	} else {
 		"".into()
@@ -327,10 +363,11 @@ fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args:
 			let key_size = pallet.items.values().map(|i| i.key_len).sum::<usize>();
 			let value_size = pallet.items.values().map(|i| i.value_len).sum::<usize>();
 			format!(
-				" ({} keys, key: {}, value: {})",
+				" ({} keys, key: {}, value: {}, compressed: {})",
 				total_keys,
 				fmt_bytes(key_size, false),
-				fmt_bytes(value_size, false)
+				fmt_bytes(value_size, false),
+				fmt_bytes(pallet.compressed_size, false)
 			)
 		} else {
 			"".into()
@@ -347,10 +384,12 @@ fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args:
 		{
 			let suffix = if verbose {
 				format!(
-					" ({} keys, key: {}, value: {})",
+					" ({} keys, key: {}, compressed_key: {}, value: {}, compressed_value: {})",
 					item.num_entries,
 					fmt_bytes(item.key_len, false),
-					fmt_bytes(item.value_len, false)
+					fmt_bytes(item.compressed_key_len, false),
+					fmt_bytes(item.value_len, false),
+					fmt_bytes(item.compressed_value_len, false)
 				)
 			} else {
 				"".into()
@@ -374,6 +413,7 @@ fn print_results(found_by_pallet: &Map<String, PalletInfo>, verbose: bool, args:
 struct JsonPalletInfo {
 	name: String,
 	size: usize,
+	compressed_size: usize,
 	items: Vec<JsonItemInfo>,
 }
 
@@ -381,7 +421,9 @@ struct JsonPalletInfo {
 struct JsonItemInfo {
 	name: String,
 	key_len: usize,
+	compressed_key_len: usize,
 	value_len: usize,
+	compressed_value_len: usize,
 	num_entries: usize,
 }
 
@@ -396,6 +438,7 @@ fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info)
 				pallet.name.clone()
 			},
 			size: pallet.size,
+			compressed_size: pallet.compressed_size,
 			items: pallet
 				.items
 				.iter()
@@ -406,7 +449,9 @@ fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info)
 						item.name.clone()
 					},
 					key_len: item.key_len,
+					compressed_key_len: item.compressed_key_len,
 					value_len: item.value_len,
+					compressed_value_len: item.compressed_value_len,
 					num_entries: item.num_entries,
 				})
 				.collect(),
@@ -415,15 +460,20 @@ fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info)
 
 	let network_info = pallet_infos.iter().fold(NetworkInfo::default(), |acc, p| {
 		let key_size = p.items.iter().map(|i| i.key_len).sum::<usize>();
+		let compressed_key_size = p.items.iter().map(|i| i.compressed_key_len).sum::<usize>();
 		let value_size = p.items.iter().map(|i| i.value_len).sum::<usize>();
+		let compressed_value_size = p.items.iter().map(|i| i.compressed_value_len).sum::<usize>();
 		let num_keys = p.items.iter().map(|i| i.num_entries).sum::<usize>();
 
 		NetworkInfo {
 			size: acc.size + p.size,
+			compressed_size: acc.compressed_size + p.compressed_size,
 			num_keys: acc.num_keys + num_keys,
 			key_size: acc.key_size + key_size,
+			compressed_key_size: acc.compressed_key_size + compressed_key_size,
 			num_values: acc.num_values + num_keys,
 			value_size: acc.value_size + value_size,
+			compressed_value_size: acc.compressed_value_size + compressed_value_size,
 		}
 	});
 
@@ -432,8 +482,10 @@ fn write_results_to_json(found_by_pallet: &Map<String, PalletInfo>, args: &Info)
 		"size": network_info.size,
 		"num_keys": network_info.num_keys,
 		"key_size": network_info.key_size,
+		"compressed_key_size": network_info.compressed_key_size,
 		"num_values": network_info.num_values,
 		"value_size": network_info.value_size,
+		"compressed_value_size": network_info.compressed_value_size,
 		"pallets": pallet_infos,
 	});
 
