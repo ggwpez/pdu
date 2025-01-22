@@ -33,7 +33,7 @@ pub struct Info {
 	#[clap(short, long)]
 	pallet: Option<String>,
 
-	/// Print verbose information.
+	/// Print verbose information including compressed sizes.
 	#[clap(long)]
 	verbose: bool,
 }
@@ -68,7 +68,7 @@ impl Info {
 			let prefix_lookup_clone = Arc::clone(&prefix_lookup);
 			let bar_clone = bar.clone();
 			let handle = task::spawn(async move {
-				process_snapshot_chunk(rx_clone, prefix_lookup_clone, bar_clone).await
+				process_snapshot_chunk(rx_clone, prefix_lookup_clone, bar_clone, verbose).await
 			});
 			handles.push(handle);
 		}
@@ -127,6 +127,7 @@ async fn process_snapshot_chunk(
 	rx: Arc<Mutex<Receiver<Option<(Vec<u8>, Vec<u8>)>>>>,
 	prefix_lookup: Arc<PrefixMap>,
 	bar: ProgressBar,
+	verbose: bool,
 ) -> Map<String, PalletInfo> {
 	let mut found_by_pallet = Map::<String, PalletInfo>::new();
 	let unknown = ansi_term::Color::Yellow.paint("Unknown").to_string();
@@ -150,8 +151,11 @@ async fn process_snapshot_chunk(
 		};
 
 		let cat = categorize_prefix(&key, &prefix_lookup);
-		let compressed_key_len = compress_size(&key);
-		let compressed_value_len = compress_size(&value);
+		let (compressed_key_len, compressed_value_len) = if verbose {
+			(compress_size(&key), compress_size(&value))
+		} else {
+			(key.len(), value.len())
+		};
 
 		match cat {
 			CategorizedKey::Item(pallet, item) => {
