@@ -241,9 +241,8 @@ async fn process_snapshot_chunk(
 	found_by_pallet
 }
 
-/// Worst case compression size using no-std `lzss`.
 fn compress_size(data: &[u8]) -> usize {
-	miniz_oxide::deflate::compress_to_vec(data, 1).len()
+	scale_compressed::ScaleCompressed::new(data).encoded_size()
 }
 
 async fn merge_partial_results(

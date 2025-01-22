@@ -16,7 +16,7 @@
 //! assert_eq!(vec![1, 2, 3, 4, 5], decoded.0);
 //! ```
 
-use parity_scale_codec::{Encode, Decode, Error, Input, Output};
+use parity_scale_codec::{Decode, Encode, Error, Input, Output};
 
 /// Wrap a struct to be compressed for encoding.
 pub struct ScaleCompressed<T>(pub T);
@@ -29,7 +29,8 @@ impl<T> ScaleCompressed<T> {
 
 impl<T: Encode> Encode for ScaleCompressed<T> {
 	fn encode_to<O: Output + ?Sized>(&self, output: &mut O) {
-		let compressed: Vec<u8> = self.0.using_encoded(|buf| miniz_oxide::deflate::compress_to_vec(buf, 6));
+		let compressed: Vec<u8> =
+			self.0.using_encoded(|buf| miniz_oxide::deflate::compress_to_vec(buf, 6));
 		compressed.encode_to(output); // Double encode for the length prefix
 	}
 }
@@ -37,7 +38,9 @@ impl<T: Encode> Encode for ScaleCompressed<T> {
 impl<T: Decode> Decode for ScaleCompressed<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let compressed = Vec::<u8>::decode(input)?;
-		let decompressed = miniz_oxide::inflate::decompress_to_vec_with_limit(&compressed, 4*1024*1024).map_err(|_| Error::from("Data corrupted"))?;
+		let decompressed =
+			miniz_oxide::inflate::decompress_to_vec_with_limit(&compressed, 4 * 1024 * 1024)
+				.map_err(|_| Error::from("Data corrupted"))?;
 		drop(compressed);
 
 		T::decode(&mut &decompressed[..]).map(Self)
@@ -53,7 +56,7 @@ mod tests {
 	fn test_encode_decode() {
 		test_works(vec![0; 0]);
 		test_works(vec![1, 2, 3, 4, 5]);
-		
+
 		test_works(None::<u8>);
 		test_works(Some(1));
 		test_works(Some(vec![1, 2, 3, 4, 5]));

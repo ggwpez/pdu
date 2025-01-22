@@ -28,10 +28,10 @@ termtree = "0.5.1"
 ansi_term = "0.12"
 num_cpus = "1.16.0"
 
+scale-compressed = { path = "scale-compressed" }
 frame-remote-externalities = { version = "0.46.0" }
 sp-runtime = { version = "39.0.1" }
 sp-io = { version = "38.0.0" }
 frame-support = { version = "38.0.0" }
 serde = { version = "1.0.217", features = ["derive"] }
 sp-application-crypto = "38.0.0"
-miniz_oxide = "0.8.3"
