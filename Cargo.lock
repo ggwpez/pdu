@@ -6600,9 +6600,9 @@ dependencies = [
 
 [[package]]
 name = "scale-compressed"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2266a401517265834d10f496b78d2e0fcb509050dfa697e54c7826e6b4f2e343"
+checksum = "2993cc5818760be72ef0073299e224ca520fa3e1b21faab3cd4201226f8a48c9"
 dependencies = [
  "miniz_oxide",
  "parity-scale-codec",
