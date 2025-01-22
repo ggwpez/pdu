@@ -4308,9 +4308,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ffbe83022cedc1d264172192511ae958937694cd57ce297164951b8b3568394"
+checksum = "b8402cab7aefae129c6977bb0ff1b8fd9a04eb5b51efc50a70bea51cda0c7924"
 dependencies = [
  "adler2",
 ]
@@ -5089,7 +5089,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "polkadot-du"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ansi_term",
  "anyhow",
@@ -5103,6 +5103,7 @@ dependencies = [
  "log",
  "num_cpus",
  "parity-scale-codec",
+ "scale-compressed",
  "serde",
  "serde_json",
  "sp-application-crypto",
@@ -6595,6 +6596,16 @@ dependencies = [
  "scale-info",
  "scale-type-resolver",
  "serde",
+]
+
+[[package]]
+name = "scale-compressed"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2266a401517265834d10f496b78d2e0fcb509050dfa697e54c7826e6b4f2e343"
+dependencies = [
+ "miniz_oxide",
+ "parity-scale-codec",
 ]
 
 [[package]]

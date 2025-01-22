@@ -1,11 +1,11 @@
 [package]
 name = "polkadot-du"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "GPL-3.0"
 repository = "https://github.com/ggwpez/pdu"
 description = "PDU - Polkadot runtime storage analyzer"
-
+readme = "README.md"
 [[bin]]
 name = "pdu"
 path = "src/main.rs"
@@ -28,6 +28,7 @@ termtree = "0.5.1"
 ansi_term = "0.12"
 num_cpus = "1.16.0"
 
+scale-compressed = "*"
 frame-remote-externalities = { version = "0.46.0" }
 sp-runtime = { version = "39.0.1" }
 sp-io = { version = "38.0.0" }
