@@ -22,6 +22,7 @@
 #[cfg(feature = "scale-info")]
 use scale_info::{TypeInfo, Type};
 
+use core::fmt;
 use parity_scale_codec::{Decode, Encode, Error, Input, Output};
 extern crate alloc;
 use alloc::vec::Vec;
@@ -60,8 +61,8 @@ impl<T: Clone> Clone for ScaleCompressed<T> {
 	}
 }
 
-impl<T: Debug> Debug for ScaleCompressed<T> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for ScaleCompressed<T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "ScaleCompressed({:?})", self.0)
 	}
 }

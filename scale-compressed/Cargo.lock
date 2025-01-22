@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "scale-compressed"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "miniz_oxide",
  "parity-scale-codec",
