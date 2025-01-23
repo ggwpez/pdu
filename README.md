@@ -1,19 +1,57 @@
-# scale-compressed
+# polkadot-du
 
-Crate to compress [SCALE](https://crates.io/crates/parity-scale-codec) encoded data.
+Investigate storage size of Substrate chains.
 
-This crate is useful for compressing data that is sent over the network.
+Install with: 
 
-## Example
-
-```rust
-use scale_compressed::ScaleCompressed;
-use parity_scale_codec::{Encode, Decode};
-
-let compressed = ScaleCompressed::new(vec![1u8, 2, 3, 4, 5]);
-let encoded = compressed.encode();
-let decoded = ScaleCompressed::<Vec<u8>>::decode(&mut &encoded[..]).unwrap();
-assert_eq!(vec![1, 2, 3, 4, 5], decoded.0);
+```sh
+cargo install polkadot-du --locked
+pdu --help
 ```
 
-License: GPL-3.0 OR Apache-2.0
+### Example: Info
+
+First acquire a state snapshot. We are going to use the People Rococo chain, since it is rather
+small. You will need the
+[try-runtime-cli](https://paritytech.github.io/try-runtime-cli/try_runtime/) for this and a
+full or archive node to download the state from:
+
+```sh
+try-runtime create-snapshot --uri wss://sys.ibp.network:443/statemint ah-polkadot.snap
+```
+
+Then run the analysis:
+
+```sh
+cargo run -r -- info --snap ah-polkadot.snap --rpc wss://sys.ibp.network:443/statemint
+```
+
+The results will be a bit boring for such a small network, but for a larger one - eg Kusama - it
+could look like this. The results will also be written into a JSON file named `kusama_storage.json`.
+You can download [this snapshot](https://tasty.limo/kusama.snap) to try it.
+
+![Kusama storage analysis](./.images/ksm-overview.png)
+
+You can also zoom in on a specific pallet:
+
+```sh
+cargo run -r -- info --snap ah-polkadot.snap --rpc wss://sys.ibp.network:443/statemint --pallet System
+```
+
+Again for Kusama:
+
+![Kusama Balances pallet](./.images/ksm-zoom.png)
+
+### Example: Grep
+
+Search for an SS58 account address across the storage snapshot:
+
+```bash
+pdu grep --snap ../runtimes/polkadot.snap --rpc wss://sys.ibp.network:443/statemint address "15kr2dkeJQuCAfBQqZjnPeqmoMTWarRMxAGWPnfSmWdaVcbi"
+```
+
+### License
+
+GPLv3 ONLY, see [LICENSE](./LICENSE) file for details.
+
+License: GPL-3.0
