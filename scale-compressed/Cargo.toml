@@ -10,7 +10,6 @@ readme = "README.md"
 [dependencies]
 miniz_oxide = "0.8.3"
 parity-scale-codec = { version = "3.6.12", default-features = false }
-hex = "*"
 
 [features]
 std = []
