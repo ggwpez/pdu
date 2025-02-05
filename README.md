@@ -50,6 +50,14 @@ Search for an SS58 account address across the storage snapshot:
 pdu grep --snap ../runtimes/polkadot.snap --rpc wss://sys.ibp.network:443/statemint address "15kr2dkeJQuCAfBQqZjnPeqmoMTWarRMxAGWPnfSmWdaVcbi"
 ```
 
+## Example: Grep Parachain Sovereign Account
+
+Search for the sovereign account of parachain 2034 (Hydration) in a Relay chain snapshot:
+
+```bash
+pdu grep --snap polkadot.snap --rpc wss://try-runtime.polkadot.io:443 para-account child 2034
+```
+
 ### License
 
 GPLv3 ONLY, see [LICENSE](./LICENSE) file for details.
