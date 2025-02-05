@@ -45,6 +45,7 @@ use env_logger::Env;
 use frame_remote_externalities::{
 	Builder, Mode, OfflineConfig, RemoteExternalities, SnapshotConfig,
 };
+use hex_literal::hex;
 use itertools::Itertools;
 use parity_scale_codec::{Decode, Encode};
 use sp_crypto_hashing::twox_128;
@@ -154,6 +155,12 @@ pub fn build_prefix_lookup(pallets: &[PalletMetadata]) -> PrefixMap {
 			}
 		}
 	}
+
+	// Some well known ones
+	prefix_lookup.insert(
+		hex!("f5207f03cfdce586301014700e2c2593fad157e461d71fd4c1f936839a5f1f3e").into(),
+		("relay_dispatch_queue_size".into(), None),
+	);
 
 	prefix_lookup
 }
