@@ -5098,6 +5098,7 @@ dependencies = [
  "frame-remote-externalities",
  "frame-support",
  "hex",
+ "hex-literal",
  "indicatif",
  "itertools 0.14.0",
  "log",

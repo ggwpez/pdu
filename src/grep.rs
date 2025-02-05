@@ -2,8 +2,10 @@ use crate::*;
 
 use sp_application_crypto::ByteArray;
 use sp_runtime::AccountId32;
-use std::str::FromStr;
-use std::fmt::{self, Display};
+use std::{
+	fmt::{self, Display},
+	str::FromStr,
+};
 
 /// PDU - Polkadot runtime storage analyzer.
 #[derive(Parser)]
@@ -38,7 +40,7 @@ impl GrepSearch {
 	}
 }
 
-#[derive(Parser)]	
+#[derive(Parser)]
 pub struct GrepSearchAddress {
 	/// Address to search for.
 	#[clap(long, index = 1)]
@@ -60,10 +62,14 @@ pub enum ParaLocation {
 
 impl Display for ParaLocation {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", match self {
-			ParaLocation::Child => "Child",
-			ParaLocation::Sibling => "Sibling",
-		})
+		write!(
+			f,
+			"{}",
+			match self {
+				ParaLocation::Child => "Child",
+				ParaLocation::Sibling => "Sibling",
+			}
+		)
 	}
 }
 
@@ -114,7 +120,7 @@ impl GrepSearchParaAccount {
 fn para_id_to_address(location: ParaLocation, para_id: u16) -> Vec<u8> {
 	let prefix = match location {
 		ParaLocation::Child => b"para",
-		ParaLocation::Sibling => b"sibl"
+		ParaLocation::Sibling => b"sibl",
 	};
 
 	let mut bytes = vec![0; 32];
@@ -136,7 +142,11 @@ impl Grep {
 		let prefix_lookup = build_prefix_lookup(&pallets);
 
 		let subjects = self.search.subjects()?;
-		log::info!("Searching for {} subjects:\n{}", subjects.len(), subjects.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n"));
+		log::info!(
+			"Searching for {} subjects:\n{}",
+			subjects.len(),
+			subjects.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n")
+		);
 
 		self.search_subjects(rx, prefix_lookup, subjects).await
 	}
@@ -176,17 +186,33 @@ impl Display for Subject {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Subject::Address(address) => write!(f, "Address({})", to_ss58(address)),
-			Subject::ParaAccount(location, id, address) => write!(f, "ParaAccount({}, {}, {})", location, id, to_ss58(address)),
+			Subject::ParaAccount(location, id, address) =>
+				write!(f, "ParaAccount({}, {}, {})", location, id, to_ss58(address)),
 		}
 	}
 }
 
 impl Subject {
-	pub fn matches(&self, data: &[u8]) -> bool {
+	pub fn matches(&self, data: &[u8]) -> Option<usize> {
 		match self {
-			Subject::Address(address) => is_substr(data, address).is_some(),
-			Subject::ParaAccount(_, _, address) => is_substr(data, address).is_some(),
+			Subject::Address(address) => is_substr(data, address),
+			Subject::ParaAccount(_, _, address) => is_substr(data, address),
 		}
+	}
+
+	/// High lights a match in red.
+	pub fn highlight_match(&self, data: &[u8], offset: usize) -> String {
+		let search_data = match self {
+			Subject::Address(address) | Subject::ParaAccount(_, _, address) => address,
+		};
+
+		let mut result = String::from("0x");
+		result.push_str(hex::encode(&data[..offset]).as_str());
+		result.push_str("\x1b[31m");
+		result.push_str(hex::encode(search_data).as_str());
+		result.push_str("\x1b[0m");
+		result.push_str(hex::encode(&data[offset + search_data.len()..]).as_str());
+		result
 	}
 }
 
@@ -206,23 +232,24 @@ impl Grep {
 			let (mut found_in_key, mut found_in_value) = (None, None);
 
 			for subject in subjects.iter() {
-				if subject.matches(&key) {
-					found_in_key = Some(subject);
+				if let Some(offset) = subject.matches(&key) {
+					found_in_key = Some((subject, offset));
 				}
-				if subject.matches(&value) {
-					found_in_value = Some(subject);
+				if let Some(offset) = subject.matches(&value) {
+					found_in_value = Some((subject, offset));
 				}
 			}
 
-			let (k, v) = if let (Some(key_subject), Some(value_subject)) = (found_in_key, found_in_value) {
-				(Some((key_subject, &key)), Some((value_subject, &value)))
-			} else if let Some(key_subject) = found_in_key {
-				(Some((key_subject, &key)), None)
-			} else if let Some(value_subject) = found_in_value {
-				(None, Some((value_subject, &value)))
-			} else {
-				continue;
-			};
+			let (k, v) =
+				if let (Some(key_subject), Some(value_subject)) = (found_in_key, found_in_value) {
+					(Some((key_subject, &key)), Some((value_subject, &value)))
+				} else if let Some(key_subject) = found_in_key {
+					(Some((key_subject, &key)), None)
+				} else if let Some(value_subject) = found_in_value {
+					(None, Some((value_subject, &value)))
+				} else {
+					continue;
+				};
 
 			count += 1;
 			let info = categorize_prefix(&key, &prefix_lookup);
@@ -231,12 +258,23 @@ impl Grep {
 				continue;
 			}
 
-			if let Some((k_subject, k)) = k {
-				println!("{}: KEY '{}' 0x{}", k_subject, info.name(), hex::encode(k));
+			if let Some(((k_subject, offset), k)) = k {
+				println!(
+					"{}: KEY '{}' 0x{}",
+					k_subject,
+					green(info.name()),
+					k_subject.highlight_match(k, offset)
+				);
 			}
 
-			if let Some((v_subject, v)) = v {
-				println!("{}: VALUE '{}' 0x{} => 0x{}", v_subject, info.name(), hex::encode(key), hex::encode(v));
+			if let Some(((v_subject, offset), v)) = v {
+				println!(
+					"{}: VALUE '{}' 0x{} => 0x{}",
+					v_subject,
+					green(info.name()),
+					hex::encode(key),
+					v_subject.highlight_match(v, offset)
+				);
 			}
 		}
 
@@ -247,9 +285,8 @@ impl Grep {
 
 	fn is_ignored(&self, key: &CategorizedKey) -> bool {
 		match key {
-			CategorizedKey::Item(pallet, _) => {
-				self.ignore_pallet.as_ref().map(|p| p == pallet).unwrap_or(false)
-			}
+			CategorizedKey::Item(pallet, _) =>
+				self.ignore_pallet.as_ref().map(|p| p == pallet).unwrap_or(false),
 			_ => false,
 		}
 	}
@@ -270,9 +307,12 @@ pub fn is_substr<T: PartialEq>(mut haystack: &[T], needle: &[T]) -> Option<usize
 	None
 }
 
-
 fn to_ss58(address: &[u8]) -> String {
 	use sp_application_crypto::Ss58Codec;
 	let inner: [u8; 32] = address.try_into().unwrap();
 	AccountId32::from(inner).to_ss58check()
+}
+
+fn green(data: String) -> String {
+	format!("\x1b[32m{}\x1b[0m", data)
 }
