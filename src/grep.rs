@@ -156,6 +156,8 @@ impl Grep {
 		match self.rpc.to_lowercase().as_str() {
 			"kusama" => "wss://kusama-rpc.polkadot.io:443".into(),
 			"polkadot" => "wss://rpc.polkadot.io:433".into(),
+			"westend-asset-hub" => "wss://westend-asset-hub-rpc.polkadot.io:443".into(),
+			"westend" => "wss://westend-rpc.polkadot.io:443".into(),
 			v => v.into(),
 		}
 	}
